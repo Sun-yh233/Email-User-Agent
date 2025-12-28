@@ -1,0 +1,11 @@
+# Core dependencies for email functionality
+# No external SMTP/POP3 libraries needed - using Python's built-in modules
+
+# GUI framework (cross-platform)
+# tkinter is included in standard Python distribution
+
+# For building executables
+pyinstaller>=5.0.0
+
+# For future Base64 encoding extensions
+# No additional dependencies needed - using built-in base64 module
