@@ -50,8 +50,7 @@ class POP3Client:
     
     def get_email_count(self) -> int:
         try:
-            if not self.connection:
-                self.connect()
+            if not self.connection: self.connect()
             # stat()返回邮件数量和邮箱大小
             count, size = self.connection.stat()
             return count
@@ -111,8 +110,7 @@ class POP3Client:
                 body = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
             except:
                 body = msg.get_payload()
-        
-        # 应用解码函数（如果提供）
+
         # 这是为未来的Base64解码定制预留的接口
         if decoder_func and body:
             try:
@@ -167,10 +165,8 @@ class POP3Client:
             raise Exception(f"删除邮件失败: {str(e)}")
 
     def __enter__(self):
-        """上下文管理器支持"""
         self.connect()
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """上下文管理器支持"""
         self.disconnect()

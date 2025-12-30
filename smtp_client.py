@@ -48,7 +48,7 @@ class SMTPClient:
                 pass
             self.connection = None
 
-    def send_email(self, to_addrs: List[str], subject: str, body: str, cc_addrs: Optional[List[str]] = None, bcc_addrs: Optional[List[str]] = None, attachments: Optional[List[str]] = None, encoder_func=None) -> bool:
+    def send_email(self, to_addrs: List[str], subject: str, body: str, cc_addrs: Optional[List[str]] = None, bcc_addrs: Optional[List[str]] = None, encoder_func = None) -> bool:
         try:
             # 创建邮件消息
             msg = MIMEMultipart()
