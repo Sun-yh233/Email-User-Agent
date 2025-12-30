@@ -279,7 +279,8 @@ class EmailClientGUI:
                 # 更新UI
                 self.root.after(0, lambda: self._on_send_success())
             except Exception as e:
-                self.root.after(0, lambda: self._on_send_error(str(e)))
+                error_msg = str(e)
+                self.root.after(0, lambda: self._on_send_error(error_msg))
         
         thread = threading.Thread(target=send_task, daemon=True)
         thread.start()
@@ -341,7 +342,8 @@ class EmailClientGUI:
                 # 更新UI
                 self.root.after(0, lambda: self._on_receive_success(emails))
             except Exception as e:
-                self.root.after(0, lambda: self._on_receive_error(str(e)))
+                error_msg = str(e)
+                self.root.after(0, lambda: self._on_receive_error(error_msg))
         
         thread = threading.Thread(target=receive_task, daemon=True)
         thread.start()
