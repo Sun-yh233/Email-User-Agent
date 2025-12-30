@@ -57,26 +57,6 @@ python main.py
    - POP3端口（通常为110或995）
    - 授权码或密码
 
-### 常见邮箱服务器配置
-
-#### QQ邮箱
-- SMTP服务器: smtp.qq.com
-- SMTP端口: 465 (SSL) 或 587 (TLS)
-- POP3服务器: pop.qq.com
-- POP3端口: 995 (SSL)
-
-#### 163邮箱
-- SMTP服务器: smtp.163.com
-- SMTP端口: 465 (SSL) 或 25
-- POP3服务器: pop.163.com
-- POP3端口: 995 (SSL) 或 110
-
-#### Sina邮箱
-- SMTP服务器: smtp.sina.com
-- SMTP端口: 465 (SSL) 或 25
-- POP3服务器: pop.sina.com
-- POP3端口: 995 (SSL) 或 110
-
 ### 发送邮件
 
 1. 点击"发送邮件"标签
