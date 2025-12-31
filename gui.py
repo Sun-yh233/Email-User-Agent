@@ -6,7 +6,7 @@ import threading
 from smtp_client import SMTPClient
 from pop3_client import POP3Client
 from config_manager import ConfigManager
-from email_encoder import EmailEncoder, create_encoder
+#from email_encoder import EmailEncoder, create_encoder
 
 class EmailClientGUI:
 
@@ -336,10 +336,13 @@ class EmailClientGUI:
         use_custom = self.config_manager.get_setting('use_custom_encoder', False)
         shared_secret = self.config_manager.get_setting('shared_secret', '')
         
+        #预留接口
+        '''
         if use_custom and shared_secret:
             self.encoder = create_encoder(True, shared_secret)
         else:
             self.encoder = None
+        '''
 
 class AccountManagerWindow:
     
