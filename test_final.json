@@ -1,0 +1,12 @@
+{
+  "accounts": [],
+  "current_account": null,
+  "settings": {
+    "auto_receive": false,
+    "receive_interval": 300,
+    "max_emails": 50,
+    "use_custom_encoder": true,
+    "shared_secret": "TestSecret123",
+    "sent_sequence": 0
+  }
+}
