@@ -3,12 +3,10 @@ import random
 import json
 import hashlib
 import hmac
-import time
 from typing import Optional, Dict, Tuple, List
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
-from email import encoders as email_encoders
 
 
 class EmailEncoder:
