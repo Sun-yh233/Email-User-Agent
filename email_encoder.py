@@ -258,9 +258,20 @@ class EmailEncoder:
         """重置发送序列号"""
         self.sent_sequence = sequence
     
-    def clear_received_sequences(self):
-        """清除已接收序列号记录"""
-        self.received_sequences.clear()
+    def clear_received_sequences(self, keep_recent: Optional[int] = None):
+        """
+        清除已接收序列号记录
+        
+        Args:
+            keep_recent: 如果指定，仅保留最近N个序列号（用于防止内存无限增长）
+        """
+        if keep_recent is None:
+            self.received_sequences.clear()
+        else:
+            if len(self.received_sequences) > keep_recent:
+                # 保留最大的N个序列号
+                sorted_seqs = sorted(self.received_sequences, reverse=True)
+                self.received_sequences = set(sorted_seqs[:keep_recent])
     
     def to_dict(self) -> Dict:
         """导出配置为字典"""

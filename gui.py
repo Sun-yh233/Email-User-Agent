@@ -327,6 +327,9 @@ class EmailClientGUI:
                     detail += "安全状态: ✓ 已加密并验证\n"
                 else:
                     detail += "安全状态: ⚠️ 加密但验证失败\n"
+                    # 显示安全警告（如果有）
+                    if email.get('security_warning'):
+                        detail += f"警告: {email['security_warning']}\n"
             else:
                 detail += "安全状态: 普通邮件（未加密）\n"
             
@@ -347,12 +350,8 @@ class EmailClientGUI:
         shared_secret = self.config_manager.get_setting('shared_secret', '')
         
         if use_secure and shared_secret:
-            # 创建或更新编码器
-            if self.encoder is None:
-                self.encoder = create_encoder(shared_secret)
-            else:
-                # 更新现有编码器的密钥
-                self.encoder = create_encoder(shared_secret)
+            # 创建编码器
+            self.encoder = create_encoder(shared_secret)
             
             # 从配置恢复序列号
             saved_sequence = self.config_manager.get_setting('sent_sequence', 0)

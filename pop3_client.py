@@ -141,12 +141,13 @@ class POP3Client:
             'date': date,
             'body': body,
             'is_secure': is_secure,
-            'verified': verified
+            'verified': verified,
+            'security_warning': None  # 存储安全警告信息
         }
         
-        # 如果验证失败，在正文前添加警告
+        # 如果验证失败，添加安全警告
         if is_secure and not verified:
-            result['body'] = "[⚠️ 安全警告: 此邮件验证失败]\n\n" + result['body']
+            result['security_warning'] = "⚠️ 安全警告: 此邮件验证失败，可能已被篡改或密钥错误"
         
         return result
     
