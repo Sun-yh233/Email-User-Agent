@@ -351,7 +351,8 @@ class SecureMIMEBuilder:
                 'sequence': encoded_data['sequence'],
                 'content': encoded_data['content'],
                 'hmac': encoded_data['hmac'],
-                'version': encoded_data['version']
+                'version': encoded_data['version'],
+                'secure': True  # 标记为安全内容
             }
             text_content = json.dumps(secure_payload, ensure_ascii=False)
             text_part = MIMEText(text_content, 'plain', 'utf-8')
@@ -370,7 +371,8 @@ class SecureMIMEBuilder:
                     'sequence': encoded_html_data['sequence'],
                     'content': encoded_html_data['content'],
                     'hmac': encoded_html_data['hmac'],
-                    'version': encoded_html_data['version']
+                    'version': encoded_html_data['version'],
+                    'secure': True  # 标记为安全内容
                 }
                 html_content = json.dumps(html_payload, ensure_ascii=False)
                 html_part = MIMEText(html_content, 'html', 'utf-8')
