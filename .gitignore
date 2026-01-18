@@ -135,4 +135,5 @@ Thumbs.db
 
 # Email config
 config.json
+test_*.json
 *.log
