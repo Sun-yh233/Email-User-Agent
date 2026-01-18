@@ -6,7 +6,7 @@ import threading
 from smtp_client import SMTPClient
 from pop3_client import POP3Client
 from config_manager import ConfigManager
-#from email_encoder import EmailEncoder, create_encoder
+from email_encoder import EmailEncoder, create_encoder
 
 class EmailClientGUI:
 
@@ -212,19 +212,21 @@ class EmailClientGUI:
                     account['password'],
                     account.get('use_ssl', True)
                 )
-                # 准备编码函数（如果启用了自定义编码）
-                encoder_func = None
-                if self.encoder:
-                    encoder_func = lambda text: self.encoder.encode(text)
-                # 发送邮件
+                
+                # 发送邮件（传递编码器对象）
                 with smtp_client:
                     smtp_client.send_email(
                         to_addrs,
                         subject,
                         body,
                         cc_addrs=cc_addrs if cc_addrs else None,
-                        encoder_func=encoder_func
+                        encoder=self.encoder
                     )
+                
+                # 保存序列号
+                if self.encoder:
+                    self.config_manager.set_setting('sent_sequence', self.encoder.sent_sequence)
+                
                 # 更新UI
                 self.root.after(0, lambda: self._on_send_success())
             except Exception as e:
@@ -268,16 +270,13 @@ class EmailClientGUI:
                     account['password'],
                     account.get('use_ssl', True)
                 )
-                # 准备解码函数（如果启用了自定义编码）
-                decoder_func = None
-                if self.encoder:
-                    decoder_func = lambda text: self.encoder.decode(text)
-                # 接收邮件
+                
+                # 接收邮件（传递解码器对象）
                 max_emails = self.config_manager.get_setting('max_emails', 50)
                 with pop3_client:
                     emails = pop3_client.list_emails(
                         count=max_emails,
-                        decoder_func=decoder_func
+                        decoder=self.encoder
                     )
                 # 更新UI
                 self.root.after(0, lambda: self._on_receive_success(emails))
@@ -321,6 +320,16 @@ class EmailClientGUI:
             detail += f"收件人: {email.get('to', '(未知)')}\n"
             detail += f"主题: {email.get('subject', '(无主题)')}\n"
             detail += f"日期: {email.get('date', '(未知)')}\n"
+            
+            # 显示安全状态
+            if email.get('is_secure', False):
+                if email.get('verified', True):
+                    detail += "安全状态: ✓ 已加密并验证\n"
+                else:
+                    detail += "安全状态: ⚠️ 加密但验证失败\n"
+            else:
+                detail += "安全状态: 普通邮件（未加密）\n"
+            
             detail += "-" * 80 + "\n\n"
             detail += email.get('body', '(无内容)')
             self.email_detail_text.insert("1.0", detail)
@@ -333,16 +342,24 @@ class EmailClientGUI:
         AdvancedSettingsWindow(self.root, self.config_manager, self._update_encoder)
     
     def _update_encoder(self):
-        use_custom = self.config_manager.get_setting('use_custom_encoder', False)
+        """更新编码器配置"""
+        use_secure = self.config_manager.get_setting('use_custom_encoder', False)
         shared_secret = self.config_manager.get_setting('shared_secret', '')
         
-        #预留接口
-        '''
-        if use_custom and shared_secret:
-            self.encoder = create_encoder(True, shared_secret)
+        if use_secure and shared_secret:
+            # 创建或更新编码器
+            if self.encoder is None:
+                self.encoder = create_encoder(shared_secret)
+            else:
+                # 更新现有编码器的密钥
+                self.encoder = create_encoder(shared_secret)
+            
+            # 从配置恢复序列号
+            saved_sequence = self.config_manager.get_setting('sent_sequence', 0)
+            if saved_sequence > 0:
+                self.encoder.sent_sequence = saved_sequence
         else:
             self.encoder = None
-        '''
 
 class AccountManagerWindow:
     

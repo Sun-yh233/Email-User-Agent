@@ -4,6 +4,7 @@ from email.header import decode_header
 from email.utils import parseaddr
 from typing import List, Dict, Optional
 import ssl
+from email_encoder import EmailEncoder, SecureMIMEBuilder
 
 class POP3Client:
     
@@ -68,7 +69,17 @@ class POP3Client:
             value = value.decode('utf-8', errors='ignore')
         return value
     
-    def _parse_email(self, email_data: bytes, decoder_func=None) -> Dict:
+    def _parse_email(self, email_data: bytes, decoder: Optional[EmailEncoder] = None) -> Dict:
+        """
+        解析邮件（支持安全解密）
+        
+        Args:
+            email_data: 邮件原始数据
+            decoder: 邮件解码器（用于安全通信）
+        
+        Returns:
+            解析后的邮件信息字典
+        """
         # 解析邮件
         msg = Parser().parsestr(email_data.decode('utf-8', errors='ignore'))
         
@@ -92,41 +103,64 @@ class POP3Client:
         # 解析日期
         date = msg.get('Date', '')
         
+        # 检查是否是安全邮件
+        is_secure = msg.get('X-Secure-Email') == 'true'
+        
         # 获取邮件正文
         body = ''
-        if msg.is_multipart():
-            # 多部分邮件
-            for part in msg.walk():
-                content_type = part.get_content_type()
-                if content_type == 'text/plain':
-                    try:
-                        body = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                        break
-                    except:
-                        pass
-        else:
-            # 单部分邮件
-            try:
-                body = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
-            except:
-                body = msg.get_payload()
-
-        # 这是为未来的Base64解码定制预留的接口
-        if decoder_func and body:
-            try:
-                body = decoder_func(body)
-            except:
-                pass  # 如果解码失败，保留原文
+        verified = True
         
-        return {
+        if decoder and decoder.use_secure and is_secure:
+            # 使用安全MIME解析器
+            parsed_content = SecureMIMEBuilder.parse_secure_email(msg, decoder)
+            body = parsed_content['body']
+            verified = parsed_content['verified']
+        else:
+            # 标准解析
+            if msg.is_multipart():
+                # 多部分邮件
+                for part in msg.walk():
+                    content_type = part.get_content_type()
+                    if content_type == 'text/plain':
+                        try:
+                            body = part.get_payload(decode=True).decode('utf-8', errors='ignore')
+                            break
+                        except:
+                            pass
+            else:
+                # 单部分邮件
+                try:
+                    body = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
+                except:
+                    body = msg.get_payload()
+        
+        result = {
             'from': f"{from_name} <{from_addr}>" if from_name else from_addr,
             'to': f"{to_name} <{to_addr}>" if to_name else to_addr,
             'subject': subject,
             'date': date,
-            'body': body
+            'body': body,
+            'is_secure': is_secure,
+            'verified': verified
         }
+        
+        # 如果验证失败，在正文前添加警告
+        if is_secure and not verified:
+            result['body'] = "[⚠️ 安全警告: 此邮件验证失败]\n\n" + result['body']
+        
+        return result
     
-    def list_emails(self, count: Optional[int] = None, decoder_func=None) -> List[Dict]:
+    def list_emails(self, count: Optional[int] = None, decoder: Optional[EmailEncoder] = None) -> List[Dict]:
+        """
+        列出邮件（支持安全解密）
+        
+        Args:
+            count: 要获取的邮件数量
+            decoder: 邮件解码器（用于安全通信）
+        
+        Returns:
+            邮件列表
+        """
         try:
             if not self.connection:
                 self.connect()
@@ -145,7 +179,7 @@ class POP3Client:
                     # 合并邮件内容
                     email_data = b'\r\n'.join(lines)
                     # 解析邮件
-                    email_info = self._parse_email(email_data, decoder_func)
+                    email_info = self._parse_email(email_data, decoder)
                     email_info['index'] = i
                     emails.append(email_info)
                 except Exception as e:

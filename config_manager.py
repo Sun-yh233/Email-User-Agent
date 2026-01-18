@@ -30,7 +30,8 @@ class ConfigManager:
                 'receive_interval': 300,  # 自动接收间隔（秒）
                 'max_emails': 50,  # 每次接收的最大邮件数
                 'use_custom_encoder': False,
-                'shared_secret': ''
+                'shared_secret': '',
+                'sent_sequence': 0  # 已发送消息序列号
             }
         }
     
