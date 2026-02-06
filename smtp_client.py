@@ -2,9 +2,9 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
-#from email import encoders
 from typing import List, Optional, Dict
 import ssl
+from email_encoder import EmailEncoder, SecureMIMEBuilder
 
 class SMTPClient:
     def __init__(self, smtp_server: str, smtp_port: int, username: str, password: str, use_ssl: bool = True):
@@ -48,28 +48,61 @@ class SMTPClient:
                 pass
             self.connection = None
 
-    def send_email(self, to_addrs: List[str], subject: str, body: str, cc_addrs: Optional[List[str]] = None, bcc_addrs: Optional[List[str]] = None, encoder_func = None) -> bool:
+    def send_email(self, to_addrs: List[str], subject: str, body: str, 
+                   cc_addrs: Optional[List[str]] = None, 
+                   bcc_addrs: Optional[List[str]] = None, 
+                   encoder: Optional[EmailEncoder] = None,
+                   html_body: Optional[str] = None) -> bool:
+        """
+        发送邮件（支持安全加密）
+        
+        Args:
+            to_addrs: 收件人地址列表
+            subject: 邮件主题
+            body: 邮件正文
+            cc_addrs: 抄送地址列表
+            bcc_addrs: 密送地址列表
+            encoder: 邮件编码器（用于安全通信）
+            html_body: HTML正文（预留）
+        
+        Returns:
+            是否发送成功
+        """
         try:
-            # 创建邮件消息
-            msg = MIMEMultipart()
-            msg['From'] = self.username
-            msg['To'] = ', '.join(to_addrs)
-            msg['Subject'] = subject
-            if cc_addrs:
-                msg['Cc'] = ', '.join(cc_addrs)
-            # 这是为未来的Base64编码定制预留的接口
-            encoded_body = body
-            if encoder_func:
-                encoded_body = encoder_func(body)
-
-            # 添加邮件正文
-            msg.attach(MIMEText(encoded_body, 'plain', 'utf-8'))
+            # 如果提供了编码器且启用了安全模式，使用安全MIME构建器
+            if encoder and encoder.use_secure:
+                msg = SecureMIMEBuilder.create_secure_email(
+                    from_addr=self.username,
+                    to_addrs=to_addrs,
+                    subject=subject,
+                    body=body,
+                    encoder=encoder,
+                    cc_addrs=cc_addrs,
+                    html_body=html_body
+                )
+            else:
+                # 否则使用标准MIME格式
+                msg = MIMEMultipart()
+                msg['From'] = self.username
+                msg['To'] = ', '.join(to_addrs)
+                msg['Subject'] = subject
+                if cc_addrs:
+                    msg['Cc'] = ', '.join(cc_addrs)
+                
+                # 添加邮件正文
+                msg.attach(MIMEText(body, 'plain', 'utf-8'))
+                
+                # 预留：HTML正文支持
+                if html_body:
+                    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+            
             # 准备收件人列表
             all_recipients = to_addrs.copy()
             if cc_addrs:
                 all_recipients.extend(cc_addrs)
             if bcc_addrs:
                 all_recipients.extend(bcc_addrs)
+            
             # 发送邮件
             if not self.connection:
                 self.connect()
