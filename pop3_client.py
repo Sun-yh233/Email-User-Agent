@@ -115,6 +115,8 @@ class POP3Client:
             parsed_content = SecureMIMEBuilder.parse_secure_email(msg, decoder)
             body = parsed_content['body']
             verified = parsed_content['verified']
+            result['msg_type'] = parsed_content.get('msg_type', 'normal')
+            result['attachments'] = parsed_content.get('attachments', [])
         else:
             # 标准解析
             if msg.is_multipart():
@@ -142,7 +144,9 @@ class POP3Client:
             'body': body,
             'is_secure': is_secure,
             'verified': verified,
-            'security_warning': None  # 存储安全警告信息
+            'security_warning': None,  # 存储安全警告信息
+            'msg_type': 'normal',  # 'paired', 'other_ua', 'normal'
+            'attachments': []  # 附件列表
         }
         
         # 如果验证失败，添加安全警告

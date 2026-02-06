@@ -52,7 +52,8 @@ class SMTPClient:
                    cc_addrs: Optional[List[str]] = None, 
                    bcc_addrs: Optional[List[str]] = None, 
                    encoder: Optional[EmailEncoder] = None,
-                   html_body: Optional[str] = None) -> bool:
+                   html_body: Optional[str] = None,
+                   attachments: Optional[List[Dict]] = None) -> bool:
         """
         发送邮件（支持安全加密）
         
@@ -64,6 +65,7 @@ class SMTPClient:
             bcc_addrs: 密送地址列表
             encoder: 邮件编码器（用于安全通信）
             html_body: HTML正文（预留）
+            attachments: 附件列表（字典包含'filename'和'data'）
         
         Returns:
             是否发送成功
@@ -78,7 +80,8 @@ class SMTPClient:
                     body=body,
                     encoder=encoder,
                     cc_addrs=cc_addrs,
-                    html_body=html_body
+                    html_body=html_body,
+                    attachments=attachments
                 )
             else:
                 # 否则使用标准MIME格式
@@ -95,6 +98,19 @@ class SMTPClient:
                 # 预留：HTML正文支持
                 if html_body:
                     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+                
+                # 添加附件
+                if attachments:
+                    from email import encoders
+                    for attachment in attachments:
+                        filename = attachment.get('filename', 'attachment')
+                        file_data = attachment.get('data')
+                        if file_data:
+                            part = MIMEBase('application', 'octet-stream')
+                            part.set_payload(file_data)
+                            encoders.encode_base64(part)
+                            part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                            msg.attach(part)
             
             # 准备收件人列表
             all_recipients = to_addrs.copy()

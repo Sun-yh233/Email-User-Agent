@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 from typing import Optional, Callable
 import threading
+import os
+import uuid
 
 from smtp_client import SMTPClient
 from pop3_client import POP3Client
@@ -89,12 +91,42 @@ class EmailClientGUI:
         self.body_text = scrolledtext.ScrolledText(
             self.send_frame,
             width=70,
-            height=20
+            height=15
         )
         self.body_text.grid(row=3, column=1, padx=5, pady=5)
+        # 附件
+        tk.Label(self.send_frame, text="附件:").grid(
+            row=4, column=0, sticky=tk.NW, padx=5, pady=5
+        )
+        attachment_frame = tk.Frame(self.send_frame)
+        attachment_frame.grid(row=4, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        self.attachment_listbox = tk.Listbox(attachment_frame, height=3, width=50)
+        self.attachment_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        attachment_btn_frame = tk.Frame(attachment_frame)
+        attachment_btn_frame.pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(
+            attachment_btn_frame,
+            text="添加",
+            command=self._add_attachment,
+            width=8
+        ).pack(pady=2)
+        
+        tk.Button(
+            attachment_btn_frame,
+            text="删除",
+            command=self._remove_attachment,
+            width=8
+        ).pack(pady=2)
+        
+        # 存储附件数据
+        self.attachments = []
+        
         # 按钮框架
         button_frame = tk.Frame(self.send_frame)
-        button_frame.grid(row=4, column=1, pady=10)
+        button_frame.grid(row=5, column=1, pady=10)
         # 发送按钮
         send_button = tk.Button(
             button_frame,
@@ -174,6 +206,35 @@ class EmailClientGUI:
         else:
             self.status_bar.config(text="未配置账号，请在设置中添加账号")
     
+    def _add_attachment(self):
+        """添加附件"""
+        filepaths = filedialog.askopenfilenames(title="选择附件")
+        for filepath in filepaths:
+            try:
+                with open(filepath, 'rb') as f:
+                    file_data = f.read()
+                
+                filename = os.path.basename(filepath)
+                
+                self.attachments.append({
+                    'filename': filename,
+                    'data': file_data
+                })
+                
+                self.attachment_listbox.insert(tk.END, filename)
+            except Exception as e:
+                messagebox.showerror("错误", f"读取文件失败: {str(e)}")
+    
+    def _remove_attachment(self):
+        """删除选中的附件"""
+        selection = self.attachment_listbox.curselection()
+        if not selection:
+            return
+        
+        index = selection[0]
+        self.attachment_listbox.delete(index)
+        self.attachments.pop(index)
+    
     def _send_email(self):
         # 获取当前账号
         account = self.config_manager.get_current_account()
@@ -213,14 +274,15 @@ class EmailClientGUI:
                     account.get('use_ssl', True)
                 )
                 
-                # 发送邮件（传递编码器对象）
+                # 发送邮件（传递编码器对象和附件）
                 with smtp_client:
                     smtp_client.send_email(
                         to_addrs,
                         subject,
                         body,
                         cc_addrs=cc_addrs if cc_addrs else None,
-                        encoder=self.encoder
+                        encoder=self.encoder,
+                        attachments=self.attachments if self.attachments else None
                     )
                 
                 # 保存序列号
@@ -249,6 +311,8 @@ class EmailClientGUI:
         self.cc_entry.delete(0, tk.END)
         self.subject_entry.delete(0, tk.END)
         self.body_text.delete("1.0", tk.END)
+        self.attachment_listbox.delete(0, tk.END)
+        self.attachments = []
     
     def _receive_emails(self):
         # 获取当前账号
@@ -321,17 +385,41 @@ class EmailClientGUI:
             detail += f"主题: {email.get('subject', '(无主题)')}\n"
             detail += f"日期: {email.get('date', '(未知)')}\n"
             
-            # 显示安全状态
+            # 显示安全状态和消息类型
+            msg_type = email.get('msg_type', 'normal')
             if email.get('is_secure', False):
-                if email.get('verified', True):
-                    detail += "安全状态: ✓ 已加密并验证\n"
+                if msg_type == 'paired':
+                    if email.get('verified', True):
+                        detail += "安全状态: ✓ 已加密并验证 [配对UA]\n"
+                    else:
+                        detail += "安全状态: ⚠️ 加密但验证失败 [配对UA]\n"
+                        # 显示安全警告（如果有）
+                        if email.get('security_warning'):
+                            detail += f"警告: {email['security_warning']}\n"
+                elif msg_type == 'other_ua':
+                    detail += "安全状态: 🔒 来自其他UA [无法解密]\n"
+                    detail += "提示: 此邮件由其他UA发送，需要使用配对的UA才能查看\n"
                 else:
-                    detail += "安全状态: ⚠️ 加密但验证失败\n"
-                    # 显示安全警告（如果有）
-                    if email.get('security_warning'):
-                        detail += f"警告: {email['security_warning']}\n"
+                    detail += "安全状态: ⚠️ 安全邮件但类型未知\n"
             else:
-                detail += "安全状态: 普通邮件（未加密）\n"
+                detail += "安全状态: 📧 普通邮件（未加密）\n"
+            
+            # 显示附件信息
+            attachments = email.get('attachments', [])
+            if attachments:
+                detail += f"\n附件 ({len(attachments)}个):\n"
+                for i, att in enumerate(attachments):
+                    att_name = att.get('filename', 'unknown')
+                    att_secure = att.get('secure', False)
+                    att_verified = att.get('verified', True)
+                    if att_secure:
+                        if att_verified:
+                            detail += f"  [{i+1}] {att_name} ✓ (已加密)\n"
+                        else:
+                            detail += f"  [{i+1}] {att_name} ⚠️ (加密但验证失败)\n"
+                    else:
+                        detail += f"  [{i+1}] {att_name} (未加密)\n"
+                detail += "\n提示: 双击列表中的邮件可保存附件\n"
             
             detail += "-" * 80 + "\n\n"
             detail += email.get('body', '(无内容)')
@@ -348,10 +436,11 @@ class EmailClientGUI:
         """更新编码器配置"""
         use_secure = self.config_manager.get_setting('use_custom_encoder', False)
         shared_secret = self.config_manager.get_setting('shared_secret', '')
+        ua_identity = self.config_manager.get_setting('ua_identity', '')
         
         if use_secure and shared_secret:
             # 创建编码器
-            self.encoder = create_encoder(shared_secret)
+            self.encoder = create_encoder(shared_secret, ua_identity)
             
             # 从配置恢复序列号
             saved_sequence = self.config_manager.get_setting('sent_sequence', 0)
@@ -667,6 +756,19 @@ class AdvancedSettingsWindow:
             fg="gray",
             justify=tk.LEFT
         ).pack(anchor=tk.W, pady=5)
+        
+        # UA身份标识（收件中心模式）
+        tk.Label(security_frame, text="UA身份标识:").pack(anchor=tk.W, pady=5)
+        self.ua_identity_entry = tk.Entry(security_frame, width=40)
+        self.ua_identity_entry.pack(anchor=tk.W, pady=5)
+        tk.Label(
+            security_frame,
+            text="提示：用于收件中心模式，配对的UA需要使用相同的身份标识。\n"
+                 "留空则自动生成随机标识。",
+            fg="gray",
+            justify=tk.LEFT
+        ).pack(anchor=tk.W, pady=5)
+        
         # 其他设置
         other_frame = tk.LabelFrame(
             self.window,
@@ -706,6 +808,9 @@ class AdvancedSettingsWindow:
         shared_secret = self.config_manager.get_setting('shared_secret', '')
         self.shared_secret_entry.insert(0, shared_secret)
         
+        ua_identity = self.config_manager.get_setting('ua_identity', '')
+        self.ua_identity_entry.insert(0, ua_identity)
+        
         max_emails = self.config_manager.get_setting('max_emails', 50)
         self.max_emails_entry.insert(0, str(max_emails))
         
@@ -714,18 +819,26 @@ class AdvancedSettingsWindow:
     def _toggle_custom_encoding(self):
         if self.use_custom_var.get():
             self.shared_secret_entry.config(state=tk.NORMAL)
+            self.ua_identity_entry.config(state=tk.NORMAL)
         else:
             self.shared_secret_entry.config(state=tk.DISABLED)
+            self.ua_identity_entry.config(state=tk.DISABLED)
     
     def _save_settings(self):
         use_custom = self.use_custom_var.get()
         shared_secret = self.shared_secret_entry.get().strip()
+        ua_identity = self.ua_identity_entry.get().strip()
         max_emails_str = self.max_emails_entry.get().strip()
         
         # 验证
         if use_custom and not shared_secret:
             messagebox.showerror("错误", "启用自定义编码时必须设置共享密钥")
             return
+        
+        # 如果启用加密但UA身份为空，自动生成
+        if use_custom and not ua_identity:
+            ua_identity = str(uuid.uuid4())
+            messagebox.showinfo("提示", f"已自动生成UA身份标识:\n{ua_identity}\n\n请保存此标识，配对的UA需要使用相同的标识。")
         
         try:
             max_emails = int(max_emails_str)
@@ -738,6 +851,7 @@ class AdvancedSettingsWindow:
         # 保存设置
         self.config_manager.set_setting('use_custom_encoder', use_custom)
         self.config_manager.set_setting('shared_secret', shared_secret)
+        self.config_manager.set_setting('ua_identity', ua_identity)
         self.config_manager.set_setting('max_emails', max_emails)
         
         messagebox.showinfo("成功", "设置已保存")

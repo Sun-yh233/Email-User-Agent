@@ -31,6 +31,7 @@ class ConfigManager:
                 'max_emails': 50,  # 每次接收的最大邮件数
                 'use_custom_encoder': False,
                 'shared_secret': '',
+                'ua_identity': '',  # UA身份标识（收件中心模式）
                 'sent_sequence': 0  # 已发送消息序列号
             }
         }
