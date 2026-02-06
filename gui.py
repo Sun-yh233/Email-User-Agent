@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 from typing import Optional, Callable
 import threading
+import os
+import uuid
 
 from smtp_client import SMTPClient
 from pop3_client import POP3Client
@@ -212,7 +214,6 @@ class EmailClientGUI:
                 with open(filepath, 'rb') as f:
                     file_data = f.read()
                 
-                import os
                 filename = os.path.basename(filepath)
                 
                 self.attachments.append({
@@ -836,7 +837,6 @@ class AdvancedSettingsWindow:
         
         # 如果启用加密但UA身份为空，自动生成
         if use_custom and not ua_identity:
-            import uuid
             ua_identity = str(uuid.uuid4())
             messagebox.showinfo("提示", f"已自动生成UA身份标识:\n{ua_identity}\n\n请保存此标识，配对的UA需要使用相同的标识。")
         

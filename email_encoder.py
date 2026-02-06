@@ -354,8 +354,6 @@ class EmailEncoder:
             expected_hmac = self._compute_hmac(hmac_data, hmac_key)
             
             if not hmac.compare_digest(received_hmac, expected_hmac):
-                if msg_type == 'other_ua':
-                    return None, False, msg_type
                 return None, False, msg_type
             
             # 生成解码表
@@ -527,19 +525,21 @@ class SecureMIMEBuilder:
                 if not file_data:
                     continue
                 
-                # 判断是否为多媒体文件（图片、音频、视频）
-                is_multimedia = False
+                # 判断是否不应该加密（多媒体文件、PDF等）
+                # 这些文件保持原样可以让邮件服务器正确识别附件类型
+                should_not_encrypt = False
                 file_ext = os.path.splitext(filename)[1].lower()
-                multimedia_exts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', 
-                                   '.mp3', '.wav', '.ogg', '.mp4', '.avi', '.mov', 
-                                   '.mkv', '.flv', '.wmv', '.pdf']
+                # 图片、音频、视频、PDF等文件不加密
+                unencrypted_exts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', 
+                                    '.mp3', '.wav', '.ogg', '.mp4', '.avi', '.mov', 
+                                    '.mkv', '.flv', '.wmv', '.pdf']
                 
-                if file_ext in multimedia_exts:
-                    is_multimedia = True
+                if file_ext in unencrypted_exts:
+                    should_not_encrypt = True
                 
-                # 对于多媒体文件，不加密，保持原样
+                # 对于应该保持原样的文件（多媒体、PDF等），不加密
                 # 对于其他文件（文本文件等），进行加密
-                if is_multimedia or not encoder.use_secure:
+                if should_not_encrypt or not encoder.use_secure:
                     # 不加密，直接添加
                     part = MIMEBase('application', 'octet-stream')
                     part.set_payload(file_data)
