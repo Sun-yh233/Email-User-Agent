@@ -281,6 +281,10 @@ class EmailEncoder:
             # 检查UA身份（收件中心模式）
             msg_type = 'paired' if sender_ua_identity == self.ua_identity else 'other_ua'
             
+            # 如果是其他UA的消息，直接返回错误，不尝试解密
+            if msg_type == 'other_ua':
+                return "[来自其他UA: 无法解密，请使用配对的UA查看]", False, msg_type
+            
             # 检查序列号（检测重放攻击和重复）
             if sequence in self.received_sequences:
                 return f"[警告: 检测到重复消息 (序列号: {sequence})]", False, msg_type
@@ -294,9 +298,6 @@ class EmailEncoder:
             expected_hmac = self._compute_hmac(hmac_data, hmac_key)
             
             if not hmac.compare_digest(received_hmac, expected_hmac):
-                # 如果是其他UA，这是预期的（密钥不同）
-                if msg_type == 'other_ua':
-                    return "[来自其他UA: 无法解密，请使用配对的UA查看]", False, msg_type
                 return "[错误: 消息认证失败，可能已被篡改]", False, msg_type
             
             # 生成解码表
@@ -340,6 +341,10 @@ class EmailEncoder:
             
             # 检查UA身份
             msg_type = 'paired' if sender_ua_identity == self.ua_identity else 'other_ua'
+            
+            # 如果是其他UA的附件，直接返回错误，不尝试解密
+            if msg_type == 'other_ua':
+                return None, False, msg_type
             
             # 检查序列号
             if sequence in self.received_sequences:
