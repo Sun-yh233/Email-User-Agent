@@ -113,6 +113,32 @@ class EmailEncoder:
                 result.append(char)  # 保留填充字符'='
         
         return ''.join(result)
+
+    def _map_base64_with_table(self, b64_text: str, encoding_table: str) -> str:
+        """
+        仅对Base64字符串进行字符表映射，不再次进行Base64编码
+        """
+        result = []
+        for char in b64_text:
+            if char in self.STANDARD_BASE64_CHARS:
+                index = self.STANDARD_BASE64_CHARS.index(char)
+                result.append(encoding_table[index])
+            else:
+                result.append(char)
+        return ''.join(result)
+
+    def _unmap_base64_with_table(self, mapped_text: str, encoding_table: str) -> str:
+        """
+        将映射后的Base64字符串还原为标准Base64字符表
+        """
+        result = []
+        for char in mapped_text:
+            if char in encoding_table:
+                index = encoding_table.index(char)
+                result.append(self.STANDARD_BASE64_CHARS[index])
+            else:
+                result.append(char)
+        return ''.join(result)
     
     def _decode_with_table(self, encoded_text: str, encoding_table: str) -> str:
         """
@@ -236,9 +262,9 @@ class EmailEncoder:
         
         # 先用标准Base64编码附件
         b64_data = base64.b64encode(file_data).decode('ascii')
-        
-        # 然后使用自定义编码表重新映射
-        encoded_data = self._encode_with_table(b64_data, encoding_table)
+
+        # 然后使用自定义编码表重新映射（不再次Base64编码）
+        encoded_data = self._map_base64_with_table(b64_data, encoding_table)
         
         # 计算HMAC
         hmac_data = f"{sequence}:{self.ua_identity}:{filename}:{encoded_data}"
@@ -365,8 +391,8 @@ class EmailEncoder:
             encoding_table = self._generate_encoding_table(message_key)
             
             # 解码数据（先反向映射，再Base64解码）
-            decoded_b64 = self._decode_with_table(encoded_data, encoding_table)
-            decoded_data = base64.b64decode(decoded_b64.encode('ascii'))
+            standard_b64 = self._unmap_base64_with_table(encoded_data, encoding_table)
+            decoded_data = base64.b64decode(standard_b64.encode('ascii'))
             
             # 记录已接收的序列号
             self.received_sequences.add(sequence)
@@ -569,6 +595,7 @@ class SecureMIMEBuilder:
                     attachment_json = json.dumps(secure_payload, ensure_ascii=False).encode('utf-8')
                     part = MIMEBase('application', 'x-secure-attachment')
                     part.set_payload(attachment_json)
+                    encoders.encode_base64(part)
                     part.add_header('Content-Disposition', f'attachment; filename="{filename}.secure"')
                     part.add_header('X-Original-Filename', filename)
                     part.add_header('X-Content-Secure', 'true')

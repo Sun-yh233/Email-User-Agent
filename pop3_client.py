@@ -1,5 +1,6 @@
 import poplib
-from email.parser import Parser
+from email import policy
+from email.parser import BytesParser
 from email.header import decode_header
 from email.utils import parseaddr
 from typing import List, Dict, Optional
@@ -80,8 +81,9 @@ class POP3Client:
         Returns:
             解析后的邮件信息字典
         """
-        # 解析邮件
-        msg = Parser().parsestr(email_data.decode('utf-8', errors='ignore'))
+        # 解析邮件，禁用行长限制以避免附件base64行过长报错
+        parser_policy = policy.default.clone(max_line_length=0)
+        msg = BytesParser(policy=parser_policy).parsebytes(email_data)
         
         # 解析发件人
         from_hdr = msg.get('From', '')
