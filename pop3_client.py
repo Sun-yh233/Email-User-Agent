@@ -109,24 +109,54 @@ class POP3Client:
         # 获取邮件正文
         body = ''
         verified = True
-        
+        msg_type = 'normal'
+        attachments = []
+
         if decoder and decoder.use_secure and is_secure:
             # 使用安全MIME解析器
             parsed_content = SecureMIMEBuilder.parse_secure_email(msg, decoder)
-            body = parsed_content['body']
-            verified = parsed_content['verified']
-            result['msg_type'] = parsed_content.get('msg_type', 'normal')
-            result['attachments'] = parsed_content.get('attachments', [])
+            body = parsed_content.get('body', '')
+            verified = parsed_content.get('verified', False)
+            msg_type = parsed_content.get('msg_type', 'normal')
+            attachments = parsed_content.get('attachments', [])
         else:
             # 标准解析
             if msg.is_multipart():
                 # 多部分邮件
                 for part in msg.walk():
+                    if part.is_multipart():
+                        continue
                     content_type = part.get_content_type()
-                    if content_type == 'text/plain':
+                    content_disposition = part.get_content_disposition()
+                    filename = part.get_filename()
+
+                    # 处理附件
+                    if content_disposition == 'attachment' or filename:
+                        if filename:
+                            decoded_parts = decode_header(filename)
+                            decoded_filename = ''
+                            for part_text, encoding in decoded_parts:
+                                if isinstance(part_text, bytes):
+                                    decoded_filename += part_text.decode(encoding or 'utf-8', errors='ignore')
+                                else:
+                                    decoded_filename += part_text
+                            filename = decoded_filename
+                        else:
+                            filename = 'attachment'
+
+                        payload = part.get_payload(decode=True)
+                        attachments.append({
+                            'filename': filename,
+                            'data': payload,
+                            'verified': True,
+                            'secure': False,
+                            'msg_type': 'normal'
+                        })
+                        continue
+
+                    if content_type == 'text/plain' and not body:
                         try:
                             body = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                            break
                         except:
                             pass
             else:
@@ -145,8 +175,8 @@ class POP3Client:
             'is_secure': is_secure,
             'verified': verified,
             'security_warning': None,  # 存储安全警告信息
-            'msg_type': 'normal',  # 'paired', 'other_ua', 'normal'
-            'attachments': []  # 附件列表
+            'msg_type': msg_type,  # 'paired', 'other_ua', 'normal'
+            'attachments': attachments  # 附件列表
         }
         
         # 如果验证失败，添加安全警告

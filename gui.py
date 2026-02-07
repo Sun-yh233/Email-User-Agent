@@ -26,6 +26,8 @@ class EmailClientGUI:
         self._create_main_interface()
         # 加载当前账号
         self._load_current_account()
+        # 初始化安全编码器（从配置恢复）
+        self._update_encoder()
     
     def _create_menu(self):
         menubar = tk.Menu(self.root)
@@ -195,6 +197,27 @@ class EmailClientGUI:
             state=tk.DISABLED
         )
         self.email_detail_text.pack(fill=tk.BOTH, expand=True)
+
+        # 附件列表区域
+        attachment_frame = tk.Frame(detail_frame)
+        attachment_frame.pack(fill=tk.X, pady=5)
+
+        tk.Label(attachment_frame, text="附件列表:").pack(side=tk.LEFT)
+
+        self.received_attachment_listbox = tk.Listbox(attachment_frame, height=3, width=50)
+        self.received_attachment_listbox.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        self.received_attachment_listbox.bind('<Double-1>', self._save_selected_attachment)
+
+        self.save_attachment_button = tk.Button(
+            attachment_frame,
+            text="保存附件",
+            command=self._save_selected_attachment,
+            width=10
+        )
+        self.save_attachment_button.pack(side=tk.LEFT, padx=5)
+
+        # 当前选中邮件的附件数据
+        self.current_attachments = []
         # 存储邮件数据
         self.emails_data = []
 
@@ -207,7 +230,7 @@ class EmailClientGUI:
             self.status_bar.config(text="未配置账号，请在设置中添加账号")
     
     def _add_attachment(self):
-        """添加附件"""
+        # 添加附件
         filepaths = filedialog.askopenfilenames(title="选择附件")
         for filepath in filepaths:
             try:
@@ -226,7 +249,7 @@ class EmailClientGUI:
                 messagebox.showerror("错误", f"读取文件失败: {str(e)}")
     
     def _remove_attachment(self):
-        """删除选中的附件"""
+        # 删除选中的附件
         selection = self.attachment_listbox.curselection()
         if not selection:
             return
@@ -419,12 +442,55 @@ class EmailClientGUI:
                             detail += f"  [{i+1}] {att_name} ⚠️ (加密但验证失败)\n"
                     else:
                         detail += f"  [{i+1}] {att_name} (未加密)\n"
-                detail += "\n提示: 双击列表中的邮件可保存附件\n"
+                detail += "\n提示: 请在下方附件列表中双击或点击按钮保存\n"
             
             detail += "-" * 80 + "\n\n"
             detail += email.get('body', '(无内容)')
             self.email_detail_text.insert("1.0", detail)
             self.email_detail_text.config(state=tk.DISABLED)
+
+            # 更新附件列表
+            self.current_attachments = attachments
+            self.received_attachment_listbox.delete(0, tk.END)
+            if attachments:
+                for att in attachments:
+                    att_name = att.get('filename', 'unknown')
+                    self.received_attachment_listbox.insert(tk.END, att_name)
+                self.save_attachment_button.config(state=tk.NORMAL)
+            else:
+                self.save_attachment_button.config(state=tk.DISABLED)
+
+    def _save_selected_attachment(self, event=None):
+        selection = self.received_attachment_listbox.curselection()
+        if not selection:
+            return
+
+        index = selection[0]
+        if index >= len(self.current_attachments):
+            return
+
+        attachment = self.current_attachments[index]
+        filename = attachment.get('filename', 'attachment')
+        data = attachment.get('data')
+
+        if not data:
+            messagebox.showwarning("警告", "该附件无法保存（内容为空或解密失败）")
+            return
+
+        save_path = filedialog.asksaveasfilename(
+            title="保存附件",
+            initialfile=filename,
+            defaultextension=""
+        )
+        if not save_path:
+            return
+
+        try:
+            with open(save_path, 'wb') as f:
+                f.write(data)
+            messagebox.showinfo("成功", f"附件已保存到:\n{save_path}")
+        except Exception as e:
+            messagebox.showerror("错误", f"保存附件失败: {str(e)}")
     
     def _show_account_manager(self):
         AccountManagerWindow(self.root, self.config_manager, self._load_current_account)
@@ -433,7 +499,7 @@ class EmailClientGUI:
         AdvancedSettingsWindow(self.root, self.config_manager, self._update_encoder)
     
     def _update_encoder(self):
-        """更新编码器配置"""
+        # 更新编码器配置
         use_secure = self.config_manager.get_setting('use_custom_encoder', False)
         shared_secret = self.config_manager.get_setting('shared_secret', '')
         ua_identity = self.config_manager.get_setting('ua_identity', '')
@@ -713,7 +779,7 @@ class AdvancedSettingsWindow:
         # 创建窗口
         self.window = tk.Toplevel(parent)
         self.window.title("高级设置")
-        self.window.geometry("500x400")
+        self.window.geometry("500x600")
         self.window.transient(parent)
         self.window.grab_set()
         
