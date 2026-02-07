@@ -7,6 +7,7 @@ import uuid
 
 from smtp_client import SMTPClient
 from pop3_client import POP3Client
+from imap_client import IMAPClient
 from config_manager import ConfigManager
 from email_encoder import EmailEncoder, create_encoder
 
@@ -343,25 +344,38 @@ class EmailClientGUI:
         if not account:
             messagebox.showerror("错误", "请先在设置中配置邮件账号")
             return
+        receive_protocol = account.get('receive_protocol', 'pop3')
         # 在新线程中接收邮件
         self.status_bar.config(text="正在接收邮件...")
         self.root.update()
         
         def receive_task():
             try:
-                # 创建POP3客户端
-                pop3_client = POP3Client(
-                    account['pop3_server'],
-                    account['pop3_port'],
-                    account['email'],
-                    account['password'],
-                    account.get('use_ssl', True)
-                )
+                if receive_protocol == 'imap':
+                    if not account.get('imap_server') or not account.get('imap_port'):
+                        raise Exception("未配置IMAP服务器或端口")
+                    client = IMAPClient(
+                        account['imap_server'],
+                        account['imap_port'],
+                        account['email'],
+                        account['password'],
+                        account.get('use_ssl', True)
+                    )
+                else:
+                    if not account.get('pop3_server') or not account.get('pop3_port'):
+                        raise Exception("未配置POP3服务器或端口")
+                    client = POP3Client(
+                        account['pop3_server'],
+                        account['pop3_port'],
+                        account['email'],
+                        account['password'],
+                        account.get('use_ssl', True)
+                    )
                 
                 # 接收邮件（传递解码器对象）
                 max_emails = self.config_manager.get_setting('max_emails', 50)
-                with pop3_client:
-                    emails = pop3_client.list_emails(
+                with client:
+                    emails = client.list_emails(
                         count=max_emails,
                         decoder=self.encoder
                     )
@@ -596,21 +610,44 @@ class AccountManagerWindow:
         tk.Label(form_frame, text="SMTP端口:").grid(row=3, column=0, sticky=tk.W, pady=5)
         self.smtp_port_entry = tk.Entry(form_frame, width=30)
         self.smtp_port_entry.grid(row=3, column=1, pady=5)
+
+        # 收件协议
+        tk.Label(form_frame, text="收件协议:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        self.receive_protocol_var = tk.StringVar(value='pop3')
+        self.receive_protocol_combo = ttk.Combobox(
+            form_frame,
+            textvariable=self.receive_protocol_var,
+            values=['pop3', 'imap'],
+            state='readonly',
+            width=27
+        )
+        self.receive_protocol_combo.grid(row=4, column=1, pady=5, sticky=tk.W)
+        self.receive_protocol_combo.bind('<<ComboboxSelected>>', self._toggle_receive_protocol)
         
         # POP3服务器
-        tk.Label(form_frame, text="POP3服务器:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        tk.Label(form_frame, text="POP3服务器:").grid(row=5, column=0, sticky=tk.W, pady=5)
         self.pop3_server_entry = tk.Entry(form_frame, width=30)
-        self.pop3_server_entry.grid(row=4, column=1, pady=5)
+        self.pop3_server_entry.grid(row=5, column=1, pady=5)
         
         # POP3端口
-        tk.Label(form_frame, text="POP3端口:").grid(row=5, column=0, sticky=tk.W, pady=5)
+        tk.Label(form_frame, text="POP3端口:").grid(row=6, column=0, sticky=tk.W, pady=5)
         self.pop3_port_entry = tk.Entry(form_frame, width=30)
-        self.pop3_port_entry.grid(row=5, column=1, pady=5)
+        self.pop3_port_entry.grid(row=6, column=1, pady=5)
+
+        # IMAP服务器
+        tk.Label(form_frame, text="IMAP服务器:").grid(row=7, column=0, sticky=tk.W, pady=5)
+        self.imap_server_entry = tk.Entry(form_frame, width=30)
+        self.imap_server_entry.grid(row=7, column=1, pady=5)
+
+        # IMAP端口
+        tk.Label(form_frame, text="IMAP端口:").grid(row=8, column=0, sticky=tk.W, pady=5)
+        self.imap_port_entry = tk.Entry(form_frame, width=30)
+        self.imap_port_entry.grid(row=8, column=1, pady=5)
         
         # 密码/授权码
-        tk.Label(form_frame, text="密码/授权码:").grid(row=6, column=0, sticky=tk.W, pady=5)
+        tk.Label(form_frame, text="密码/授权码:").grid(row=9, column=0, sticky=tk.W, pady=5)
         self.password_entry = tk.Entry(form_frame, width=30, show="*")
-        self.password_entry.grid(row=6, column=1, pady=5)
+        self.password_entry.grid(row=9, column=1, pady=5)
         
         # SSL选项
         self.use_ssl_var = tk.BooleanVar(value=True)
@@ -618,11 +655,11 @@ class AccountManagerWindow:
             form_frame,
             text="使用SSL/TLS",
             variable=self.use_ssl_var
-        ).grid(row=7, column=1, sticky=tk.W, pady=5)
+        ).grid(row=10, column=1, sticky=tk.W, pady=5)
         
         # 按钮
         button_frame2 = tk.Frame(form_frame)
-        button_frame2.grid(row=8, column=1, pady=10)
+        button_frame2.grid(row=11, column=1, pady=10)
         
         tk.Button(
             button_frame2,
@@ -639,6 +676,8 @@ class AccountManagerWindow:
             command=self._clear_form,
             width=10
         ).pack(side=tk.LEFT, padx=5)
+
+        self._toggle_receive_protocol()
     
     def _load_accounts(self):
         self.account_listbox.delete(0, tk.END)
@@ -669,10 +708,18 @@ class AccountManagerWindow:
         self.email_entry.insert(0, account['email'])
         self.smtp_server_entry.insert(0, account['smtp_server'])
         self.smtp_port_entry.insert(0, str(account['smtp_port']))
-        self.pop3_server_entry.insert(0, account['pop3_server'])
-        self.pop3_port_entry.insert(0, str(account['pop3_port']))
+        self.receive_protocol_var.set(account.get('receive_protocol', 'pop3'))
+        self.pop3_server_entry.insert(0, account.get('pop3_server', ''))
+        pop3_port = account.get('pop3_port')
+        if pop3_port is not None:
+            self.pop3_port_entry.insert(0, str(pop3_port))
+        self.imap_server_entry.insert(0, account.get('imap_server', ''))
+        imap_port = account.get('imap_port')
+        if imap_port is not None:
+            self.imap_port_entry.insert(0, str(imap_port))
         self.password_entry.insert(0, account['password'])
         self.use_ssl_var.set(account.get('use_ssl', True))
+        self._toggle_receive_protocol()
     
     def _clear_form(self):
         self.name_entry.delete(0, tk.END)
@@ -681,8 +728,29 @@ class AccountManagerWindow:
         self.smtp_port_entry.delete(0, tk.END)
         self.pop3_server_entry.delete(0, tk.END)
         self.pop3_port_entry.delete(0, tk.END)
+        self.imap_server_entry.delete(0, tk.END)
+        self.imap_port_entry.delete(0, tk.END)
         self.password_entry.delete(0, tk.END)
         self.use_ssl_var.set(True)
+        self.receive_protocol_var.set('pop3')
+        self._toggle_receive_protocol()
+
+    def _toggle_receive_protocol(self, event=None):
+        protocol = self.receive_protocol_var.get()
+        pop3_state = tk.NORMAL if protocol == 'pop3' else tk.DISABLED
+        imap_state = tk.NORMAL if protocol == 'imap' else tk.DISABLED
+        self.pop3_server_entry.config(state=pop3_state)
+        self.pop3_port_entry.config(state=pop3_state)
+        self.imap_server_entry.config(state=imap_state)
+        self.imap_port_entry.config(state=imap_state)
+
+    def _parse_optional_port(self, port_str: str, field_name: str):
+        if not port_str:
+            return None
+        try:
+            return int(port_str)
+        except ValueError:
+            raise ValueError(f"{field_name}必须是数字")
 
     def _add_account(self):
         self._clear_form()
@@ -694,18 +762,36 @@ class AccountManagerWindow:
         smtp_port = self.smtp_port_entry.get().strip()
         pop3_server = self.pop3_server_entry.get().strip()
         pop3_port = self.pop3_port_entry.get().strip()
+        imap_server = self.imap_server_entry.get().strip()
+        imap_port = self.imap_port_entry.get().strip()
         password = self.password_entry.get().strip()
+        receive_protocol = self.receive_protocol_var.get()
         
         # 验证输入
-        if not all([name, email, smtp_server, smtp_port, pop3_server, pop3_port, password]):
-            messagebox.showerror("错误", "请填写所有必填字段")
-            return
         try:
             smtp_port = int(smtp_port)
-            pop3_port = int(pop3_port)
         except ValueError:
-            messagebox.showerror("错误", "端口必须是数字")
+            messagebox.showerror("错误", "SMTP端口必须是数字")
             return
+        try:
+            pop3_port = self._parse_optional_port(pop3_port, "POP3端口")
+            imap_port = self._parse_optional_port(imap_port, "IMAP端口")
+        except ValueError as e:
+            messagebox.showerror("错误", str(e))
+            return
+
+        if not all([name, email, smtp_server, smtp_port, password]):
+            messagebox.showerror("错误", "请填写所有必填字段")
+            return
+
+        if receive_protocol == 'imap':
+            if not imap_server or imap_port is None:
+                messagebox.showerror("错误", "请选择IMAP协议时需填写IMAP服务器和端口")
+                return
+        else:
+            if not pop3_server or pop3_port is None:
+                messagebox.showerror("错误", "请选择POP3协议时需填写POP3服务器和端口")
+                return
         # 检查是否是更新现有账号
         existing_account = self.config_manager.get_account(name)
         account = {
@@ -715,8 +801,11 @@ class AccountManagerWindow:
             'smtp_port': smtp_port,
             'pop3_server': pop3_server,
             'pop3_port': pop3_port,
+            'imap_server': imap_server,
+            'imap_port': imap_port,
             'password': password,
-            'use_ssl': self.use_ssl_var.get()
+            'use_ssl': self.use_ssl_var.get(),
+            'receive_protocol': receive_protocol
         }
         
         if existing_account:

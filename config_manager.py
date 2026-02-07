@@ -47,10 +47,20 @@ class ConfigManager:
     
     def add_account(self, account: Dict) -> bool:
         # 检查必需字段
-        required_fields = ['name', 'email', 'smtp_server', 'smtp_port', 'pop3_server', 'pop3_port', 'password']
+        required_fields = ['name', 'email', 'smtp_server', 'smtp_port', 'password']
         for field in required_fields:
             if field not in account:
                 print(f"缺少必需字段: {field}")
+                return False
+        # 检查收件协议与配置
+        receive_protocol = account.get('receive_protocol', 'pop3')
+        if receive_protocol == 'imap':
+            if not account.get('imap_server') or not account.get('imap_port'):
+                print("缺少必需字段: imap_server/imap_port")
+                return False
+        else:
+            if not account.get('pop3_server') or not account.get('pop3_port'):
+                print("缺少必需字段: pop3_server/pop3_port")
                 return False
         # 检查是否已存在同名账号
         for existing_account in self.config['accounts']:
@@ -60,6 +70,8 @@ class ConfigManager:
         # 添加默认值
         if 'use_ssl' not in account:
             account['use_ssl'] = True
+        if 'receive_protocol' not in account:
+            account['receive_protocol'] = receive_protocol
         
         self.config['accounts'].append(account)
         
